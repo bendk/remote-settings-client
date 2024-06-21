@@ -650,11 +650,29 @@ impl Client {
         T: TryFrom<Vec<u8>, Error = E>,
         E: 'static + Send + Sync + std::error::Error,
     {
-        let metadata = match record.attachment_metadata()? {
+        match record.attachment_metadata()? {
             None => return Ok(None),
-            Some(m) => m,
-        };
+            Some(m) => Ok(Some(self.fetch_attachment_from_metadata(m).await?)),
+        }
+    }
 
+    /// Download the attachment for a record.
+    ///
+    /// Return values:
+    /// * Ok(Some(T)) - There is an attachment for the record and it was
+    ///   successfully downloaded.
+    /// * Err(_) - There is an attachment for the record, and there was a
+    ///   problem while downloading it. This should be considered a temporary
+    ///   error.
+    /// * Ok(None) - There is no attachment for the record
+    pub async fn fetch_attachment_from_metadata<T, E>(
+        &mut self,
+        metadata: &AttachmentMetadata,
+    ) -> Result<T, ClientError>
+    where
+        T: TryFrom<Vec<u8>, Error = E>,
+        E: 'static + Send + Sync + std::error::Error,
+    {
         let key = format!(
             "attachment:{}/{}:{}",
             self.bucket_name, self.collection_name, metadata.hash
@@ -714,7 +732,7 @@ impl Client {
             .try_into()
             .context("parsing attachment to requested type")
             .map_err(ClientError::AttachmentMetadataError)?;
-        Ok(Some(rv))
+        Ok(rv)
     }
 
     /// Store a record on the server.
